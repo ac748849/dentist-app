@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Dentist {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  phone        String?
+  specialties  String[]
+  workingHours Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  appointments Appointment[]
+  timeSlots    TimeSlot[]
+}
+
+model Patient {
+  id          String    @id @default(cuid())
+  phone       String    @unique
+  name        String
+  email       String?
+  telegramId  String?   @unique
+  consentGDPR Boolean   @default(false)
+  consentDate DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  appointments Appointment[]
+}
+
+model TimeSlot {
+  id        String  @id @default(cuid())
+  dentistId String
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  duration  Int
+  isActive  Boolean @default(true)
+  
+  dentist Dentist @relation(fields: [dentistId], references: [id], onDelete: Cascade)
+  
+  @@index([dentistId])
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model Appointment {
+  id           String            @id @default(cuid())
+  dentistId    String
+  patientId    String
+  startTime    DateTime
+  endTime      DateTime
+  status       AppointmentStatus @default(PENDING)
+  notes        String?
+  source       String
+  reminderSent Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  
+  dentist Dentist @relation(fields: [dentistId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+  
+  @@index([dentistId, startTime])
+  @@index([patientId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
