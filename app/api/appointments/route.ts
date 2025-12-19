@@ -26,3 +26,37 @@ export async function GET() {
     )
   }
 }
+
+// POST /api/appointments - Créer un rendez-vous
+export async function POST(request: Request) {
+    try {
+      const body = await request.json()
+      
+      const appointment = await prisma.appointment.create({
+        data: {
+          dentistId: body.dentistId,
+          patientId: body.patientId,
+          startTime: new Date(body.startTime),
+          endTime: new Date(body.endTime),
+          status: body.status || 'PENDING',
+          source: body.source || 'web',
+          notes: body.notes || null,
+        },
+        include: {
+          dentist: true,
+          patient: true,
+        },
+      })
+  
+      return NextResponse.json({
+        success: true,
+        data: appointment,
+      })
+    } catch (error) {
+      console.error('Error creating appointment:', error)
+      return NextResponse.json(
+        { success: false, error: 'Failed to create appointment' },
+        { status: 500 }
+      )
+    }
+  }
