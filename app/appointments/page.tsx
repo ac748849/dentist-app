@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma/client'
+import DeleteButton from './DeleteButton'
 
 export default async function AppointmentsPage() {
-  // Récupérer tous les rendez-vous depuis la DB
   const appointments = await prisma.appointment.findMany({
     include: {
       dentist: true,
@@ -15,18 +15,15 @@ export default async function AppointmentsPage() {
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="mb-8 flex justify-between items-center">
-  <div>
-    <h1 className="text-3xl font-bold text-gray-900">Rendez-vous</h1>
-    <p className="mt-2 text-gray-600">Liste de tous les rendez-vous</p>
-  </div>
-  <a 
-    href="/appointments/new" 
-    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-  >
-    + Nouveau rendez-vous
-  </a>
-</div>
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Rendez-vous</h1>
+            <p className="mt-2 text-gray-600">Liste de tous les rendez-vous</p>
+          </div>
+          <a href="/appointments/new" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+            + Nouveau rendez-vous
+          </a>
+        </div>
 
         <div className="bg-white shadow-md rounded-lg overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
@@ -37,6 +34,7 @@ export default async function AppointmentsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Heure</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -79,6 +77,10 @@ export default async function AppointmentsPage() {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {appointment.notes || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <a href={`/appointments/${appointment.id}/edit`} className="text-indigo-600 hover:text-indigo-900">Modifier</a>
+                    <DeleteButton appointmentId={appointment.id} />
                   </td>
                 </tr>
               ))}
