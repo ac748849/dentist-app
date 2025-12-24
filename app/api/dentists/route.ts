@@ -7,7 +7,12 @@ export async function GET() {
       select: {
         id: true,
         name: true,
+        email: true,
+        phone: true,
         specialties: true,
+        workingHours: true,
+        googleCalendarEnabled: true,
+        googleCalendarId: true,
       },
     })
 

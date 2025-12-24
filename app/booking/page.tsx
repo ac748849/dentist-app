@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import InterventionTypeSelector from './InterventionTypeSelector'
 
 type Dentist = {
   id: string
@@ -15,8 +16,11 @@ export default function BookingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  
+  // 🆕 État pour le type d'intervention
+  const [interventionType, setInterventionType] = useState('')
+  const [ageCategory, setAgeCategory] = useState('')
 
-  // Charger les dentistes au démarrage
   useEffect(() => {
     async function loadDentists() {
       try {
@@ -26,188 +30,270 @@ export default function BookingPage() {
           setDentists(data.data)
         }
       } catch (err) {
-        console.error('Erreur chargement dentistes:', err)
+        console.error('Error loading dentists:', err)
       }
     }
     loadDentists()
   }, [])
+
+  function handleInterventionSelect(type: string, age: string) {
+    setInterventionType(type)
+    setAgeCategory(age)
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    const formData = new FormData(e.currentTarget)
-    
-    const dentistId = formData.get('dentist') as string
-    const date = formData.get('date') as string
-    const time = formData.get('time') as string
-    const name = formData.get('name') as string
-    const phone = formData.get('phone') as string
-    const email = formData.get('email') as string
-    const notes = formData.get('notes') as string
-
-    const startTime = new Date(`${date}T${time}:00`)
-    const endTime = new Date(startTime.getTime() + 30 * 60000)
-
     try {
-      // 1. Créer/récupérer le patient
+      const formData = new FormData(e.currentTarget)
+      
+      const dentistId = formData.get('dentist') as string
+      const date = formData.get('date') as string
+      const time = formData.get('time') as string
+      const name = formData.get('name') as string
+      const phone = formData.get('phone') as string
+      const email = formData.get('email') as string
+      const notes = formData.get('notes') as string
+
+      if (!interventionType) {
+        setError('Veuillez sélectionner un type d\'intervention')
+        setLoading(false)
+        return
+      }
+
+      // Créer ou récupérer le patient
       const patientResponse = await fetch('/api/patients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, email }),
+        body: JSON.stringify({
+          name,
+          phone,
+          email: email || null,
+          ageCategory,
+        }),
       })
 
-      if (!patientResponse.ok) throw new Error('Erreur patient')
+      if (!patientResponse.ok) {
+        throw new Error('Erreur lors de la création du patient')
+      }
 
-      const { data: patient } = await patientResponse.json()
+      const patientData = await patientResponse.json()
 
-      // 2. Créer le rendez-vous
+      // Créer le rendez-vous avec le type d'intervention
+      const startTime = new Date(`${date}T${time}:00`)
+      
       const appointmentResponse = await fetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           dentistId,
-          patientId: patient.id,
+          patientId: patientData.data.id,
           startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          status: 'PENDING',
-          source: 'web',
+          interventionType, // 🆕 Envoi du type
           notes: notes || null,
+          source: 'web',
         }),
       })
 
-      if (!appointmentResponse.ok) throw new Error('Erreur rendez-vous')
+      if (!appointmentResponse.ok) {
+        throw new Error('Erreur lors de la création du rendez-vous')
+      }
 
       setSuccess(true)
-      setTimeout(() => router.push('/'), 2000)
+      setTimeout(() => {
+        router.push('/')
+      }, 2000)
 
     } catch (err) {
-      setError('Une erreur est survenue. Veuillez réessayer.')
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue')
+    } finally {
       setLoading(false)
     }
   }
 
   if (success) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="bg-white shadow-sm">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <h1 className="text-3xl font-bold text-gray-900">🦷 Prendre rendez-vous</h1>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
           </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Rendez-vous confirmé !</h2>
+          <p className="text-gray-600">Vous allez être redirigé vers l'accueil...</p>
         </div>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="bg-white rounded-lg shadow-md p-8">
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">Rendez-vous confirmé !</h3>
-              <p className="mt-2 text-sm text-gray-500">Vous allez recevoir une confirmation par SMS.</p>
-              <p className="mt-4 text-sm text-gray-500">Redirection vers l'accueil...</p>
-            </div>
-          </div>
-        </div>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="bg-white shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">🦷 Prendre rendez-vous</h1>
-              <p className="mt-1 text-sm text-gray-600">Réservez votre consultation en quelques clics</p>
-            </div>
-            <a href="/" className="text-sm text-indigo-600 hover:text-indigo-800">← Retour à l'accueil</a>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Prendre rendez-vous
+          </h1>
+          <p className="text-gray-600">
+            Remplissez le formulaire pour réserver votre consultation
+          </p>
         </div>
-      </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-white rounded-lg shadow-md p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations sur le rendez-vous</h2>
-          
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-red-800 text-sm">{error}</p>
-            </div>
-          )}
-
+        <div className="bg-white rounded-lg shadow-xl p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="dentist" className="block text-sm font-medium text-gray-700">Choisir un dentiste</label>
-              <select id="dentist" name="dentist" required className="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 rounded-md">
-                <option value="">Sélectionner un dentiste</option>
-                {dentists.map((dentist) => (
-                  <option key={dentist.id} value={dentist.id}>
-                    {dentist.name} {dentist.specialties.length > 0 && `- ${dentist.specialties.join(', ')}`}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                {error}
+              </div>
+            )}
 
-            <div>
-              <label htmlFor="date" className="block text-sm font-medium text-gray-700">Choisir une date</label>
-              <input type="date" id="date" name="date" required min={new Date().toISOString().split('T')[0]} className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md" />
-            </div>
+            {/* 🆕 Sélecteur de type d'intervention */}
+            <InterventionTypeSelector 
+              onSelect={handleInterventionSelect}
+              selectedType={interventionType}
+            />
 
-            <div>
-              <label htmlFor="time" className="block text-sm font-medium text-gray-700">Choisir une heure</label>
-              <select id="time" name="time" required className="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 rounded-md">
-                <option value="">Sélectionner un créneau</option>
-                <option value="09:00">09:00</option>
-                <option value="09:30">09:30</option>
-                <option value="10:00">10:00</option>
-                <option value="10:30">10:30</option>
-                <option value="11:00">11:00</option>
-                <option value="11:30">11:30</option>
-                <option value="14:00">14:00</option>
-                <option value="14:30">14:30</option>
-                <option value="15:00">15:00</option>
-                <option value="15:30">15:30</option>
-                <option value="16:00">16:00</option>
-                <option value="16:30">16:30</option>
-                <option value="17:00">17:00</option>
-              </select>
-            </div>
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Informations du rendez-vous
+              </h3>
 
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Vos informations</h3>
-              
+              {/* Dentiste */}
               <div className="mb-4">
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nom complet</label>
-                <input type="text" id="name" name="name" required className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md" placeholder="Jean Dupont" />
+                <label htmlFor="dentist" className="block text-sm font-medium text-gray-700 mb-1">
+                  Dentiste *
+                </label>
+                <select
+                  id="dentist"
+                  name="dentist"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Sélectionnez un dentiste</option>
+                  {dentists.map((dentist) => (
+                    <option key={dentist.id} value={dentist.id}>
+                      {dentist.name} - {dentist.specialties.join(', ')}
+                    </option>
+                  ))}
+                </select>
               </div>
 
+              {/* Date */}
               <div className="mb-4">
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Téléphone</label>
-                <input type="tel" id="phone" name="phone" required className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md" placeholder="06 12 34 56 78" />
+                <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
+                  Date *
+                </label>
+                <input
+                  type="date"
+                  id="date"
+                  name="date"
+                  required
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
               </div>
 
+              {/* Heure */}
               <div className="mb-4">
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email (optionnel)</label>
-                <input type="email" id="email" name="email" className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md" placeholder="jean.dupont@email.com" />
-              </div>
-
-              <div>
-                <label htmlFor="notes" className="block text-sm font-medium text-gray-700">Notes (optionnel)</label>
-                <textarea id="notes" name="notes" rows={3} className="mt-1 block w-full px-3 py-2 border-gray-300 rounded-md" placeholder="Motif de la consultation, urgence, etc." />
+                <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
+                  Heure *
+                </label>
+                <select
+                  id="time"
+                  name="time"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Sélectionnez une heure</option>
+                  <option value="09:00">09:00</option>
+                  <option value="09:30">09:30</option>
+                  <option value="10:00">10:00</option>
+                  <option value="10:30">10:30</option>
+                  <option value="11:00">11:00</option>
+                  <option value="11:30">11:30</option>
+                  <option value="14:00">14:00</option>
+                  <option value="14:30">14:30</option>
+                  <option value="15:00">15:00</option>
+                  <option value="15:30">15:30</option>
+                  <option value="16:00">16:00</option>
+                  <option value="16:30">16:30</option>
+                  <option value="17:00">17:00</option>
+                </select>
               </div>
             </div>
 
-            <div className="pt-6">
-              <button type="submit" disabled={loading} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400">
-                {loading ? 'Confirmation en cours...' : 'Confirmer le rendez-vous'}
-              </button>
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Vos informations
+              </h3>
+
+              {/* Nom */}
+              <div className="mb-4">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nom complet *
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Téléphone */}
+              <div className="mb-4">
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Téléphone *
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Email */}
+              <div className="mb-4">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email (optionnel)
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="mb-4">
+                <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes / Raison de la visite (optionnel)
+                </label>
+                <textarea
+                  id="notes"
+                  name="notes"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
             </div>
+
+            <button
+              type="submit"
+              disabled={loading || !interventionType}
+              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-md font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Confirmation en cours...' : 'Confirmer le rendez-vous'}
+            </button>
           </form>
         </div>
       </div>
-    </main>
+    </div>
   )
 }

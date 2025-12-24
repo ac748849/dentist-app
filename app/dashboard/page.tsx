@@ -109,6 +109,39 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        {/* Actions rapides */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Actions rapides
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <a
+              href="/dashboard/appointments?status=PENDING"
+              className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              📋 RDV en attente
+            </a>
+            <a
+              href="/dashboard/appointments"
+              className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              📅 Tous les RDV
+            </a>
+            <a
+              href="/dashboard/calendar"
+              className="flex items-center justify-center px-4 py-3 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+            >
+              📆 Vue Calendrier
+            </a>
+            <a
+              href="/dashboard/settings"
+              className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              ⚙️ Paramètres
+            </a>
+          </div>
+        </div>
+
         {/* Prochains RDV */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -145,7 +178,7 @@ export default async function DashboardPage() {
             )}
           </div>
           <div className="px-6 py-4 bg-gray-50">
-            <a href="/appointments" className="text-sm text-indigo-600 hover:text-indigo-800">
+            <a href="/dashboard/appointments" className="text-sm text-indigo-600 hover:text-indigo-800">
               Voir tous les rendez-vous →
             </a>
           </div>
