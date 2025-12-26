@@ -1,244 +1,417 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 
-type Dentist = {
+type DentistSettings = {
   id: string
   name: string
   email: string
+  phone: string | null
   googleCalendarEnabled: boolean
   googleCalendarId: string | null
+  googleTokenExpiry: string | null
 }
 
 export default function SettingsPage() {
-  const searchParams = useSearchParams()
-  const [dentist, setDentist] = useState<Dentist | null>(null)
+  const [settings, setSettings] = useState<DentistSettings | null>(null)
   const [loading, setLoading] = useState(true)
-  const [connecting, setConnecting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
-  useEffect(() => {
-    loadDentist()
-    
-    // Gérer les messages de succès/erreur
-    const success = searchParams.get('success')
-    const error = searchParams.get('error')
-    
-    if (success === 'calendar_connected') {
-      setMessage({ type: 'success', text: '✅ Google Calendar connecté avec succès !' })
-    } else if (error) {
-      setMessage({ type: 'error', text: `❌ Erreur : ${error}` })
-    }
-  }, [searchParams])
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+  })
 
-  async function loadDentist() {
+  useEffect(() => {
+    loadSettings()
+  }, [])
+
+  async function loadSettings() {
     try {
-      const response = await fetch('/api/dentists')
+      const response = await fetch('/api/settings')
       const data = await response.json()
       
-      if (data.success && data.data.length > 0) {
-        setDentist(data.data[0])
+      if (data.success) {
+        setSettings(data.data)
+        setFormData({
+          name: data.data.name,
+          email: data.data.email,
+          phone: data.data.phone || '',
+        })
       }
     } catch (error) {
-      console.error('Error loading dentist:', error)
+      console.error('Error loading settings:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleConnectGoogleCalendar() {
-    if (!dentist) return
-    
-    setConnecting(true)
-    
-    const GOOGLE_CLIENT_ID = '710771993502-51pbjcarqd4v99ciit0b0fq2nl4vfkus.apps.googleusercontent.com'
-    const REDIRECT_URI = 'http://localhost:3000/auth/google/callback'
-    const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events'
-    
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${GOOGLE_CLIENT_ID}` +
-      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-      `&response_type=code` +
-      `&scope=${encodeURIComponent(SCOPES)}` +
-      `&access_type=offline` +
-      `&state=${dentist.id}` +
-      `&prompt=consent`
-    
-    window.location.href = authUrl
-  }
-
-  async function handleDisconnectGoogleCalendar() {
-    if (!dentist || !confirm('Êtes-vous sûr de vouloir déconnecter Google Calendar ?')) return
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setMessage(null)
 
     try {
-      const response = await fetch('/api/auth/google/disconnect', {
-        method: 'POST',
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dentistId: dentist.id }),
+        body: JSON.stringify(formData),
       })
 
       if (response.ok) {
-        setMessage({ type: 'success', text: '✅ Google Calendar déconnecté' })
-        loadDentist()
+        setMessage({ type: 'success', text: 'Profil mis à jour avec succès' })
+        await loadSettings()
       } else {
-        setMessage({ type: 'error', text: '❌ Erreur lors de la déconnexion' })
+        setMessage({ type: 'error', text: 'Erreur lors de la mise à jour' })
       }
     } catch (error) {
-      console.error('Error disconnecting:', error)
-      setMessage({ type: 'error', text: '❌ Erreur lors de la déconnexion' })
+      setMessage({ type: 'error', text: 'Erreur lors de la mise à jour' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDisconnectGoogle() {
+    if (!confirm('Êtes-vous sûr de vouloir déconnecter Google Calendar ?')) {
+      return
+    }
+
+    try {
+      const response = await fetch('/api/google/disconnect', {
+        method: 'POST',
+      })
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Google Calendar déconnecté' })
+        await loadSettings()
+      } else {
+        setMessage({ type: 'error', text: 'Erreur lors de la déconnexion' })
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Erreur lors de la déconnexion' })
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Chargement...</p>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
       </div>
     )
   }
 
+  const isTokenExpiringSoon = settings?.googleTokenExpiry 
+    ? new Date(settings.googleTokenExpiry).getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000 
+    : false
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Paramètres</h1>
-            <p className="mt-2 text-gray-600">Gérez les intégrations et les paramètres de votre compte</p>
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Paramètres
+        </h1>
+        <p className="text-gray-600">
+          Gérez votre profil et vos intégrations
+        </p>
+      </div>
+
+      {/* Messages */}
+      {message && (
+        <div className={`rounded-xl p-4 border-2 ${
+          message.type === 'success' 
+            ? 'bg-green-50 border-green-200 text-green-800' 
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <div className="flex items-center">
+            {message.type === 'success' ? (
+              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            <span className="font-medium">{message.text}</span>
           </div>
-          <a
-            href="/dashboard"
-            className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Retour
-          </a>
+        </div>
+      )}
+
+      {/* Profile section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center">
+            <svg className="w-6 h-6 text-teal-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Profil
+          </h2>
         </div>
 
-        {/* Message de succès/erreur */}
-        {message && (
-          <div className={`mb-6 rounded-lg p-4 ${
-            message.type === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-          }`}>
-            <p className={message.type === 'success' ? 'text-green-700' : 'text-red-700'}>
-              {message.text}
-            </p>
-          </div>
-        )}
-
-        {/* Google Calendar */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Google Calendar</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Synchronisez automatiquement vos rendez-vous avec Google Calendar
-            </p>
+        <form onSubmit={handleSaveProfile} className="p-6 space-y-6">
+          <div className="flex items-center gap-6 pb-6 border-b border-gray-100">
+            <div className="w-20 h-20 bg-gradient-to-br from-teal-400 to-cyan-500 rounded-full flex items-center justify-center text-4xl">
+              👩‍⚕️
+            </div>
+            <div>
+              <div className="font-bold text-xl text-gray-900">{settings?.name}</div>
+              <div className="text-gray-600">{settings?.email}</div>
+            </div>
           </div>
 
-          <div className="px-6 py-6">
-            {dentist?.googleCalendarEnabled && dentist?.googleCalendarId ? (
-              <div>
-                <div className="flex items-center mb-4">
-                  <div className="flex-shrink-0">
-                    <svg className="h-10 w-10 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Nom complet
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-teal-500 focus:ring-0 outline-none transition"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-teal-500 focus:ring-0 outline-none transition"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Téléphone
+            </label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-teal-500 focus:ring-0 outline-none transition"
+              placeholder="02 123 45 67"
+            />
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-gray-100">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-3 bg-teal-500 text-white rounded-lg font-semibold hover:bg-teal-600 transition disabled:opacity-50"
+            >
+              {saving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Google Calendar section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center">
+            <svg className="w-6 h-6 text-teal-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Google Calendar
+          </h2>
+        </div>
+
+        <div className="p-6">
+          {settings?.googleCalendarEnabled ? (
+            <div className="space-y-6">
+              {/* Connected status */}
+              <div className="flex items-start justify-between p-6 bg-green-50 border-2 border-green-200 rounded-xl">
+                <div className="flex items-start">
+                  <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4">
+                    <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <div className="ml-4">
-                    <h3 className="text-sm font-medium text-gray-900">Connecté</h3>
-                    <p className="text-sm text-gray-600">{dentist.googleCalendarId}</p>
+                  <div>
+                    <div className="font-bold text-gray-900 mb-1">Compte connecté</div>
+                    <div className="text-sm text-gray-700 mb-2">
+                      Vos rendez-vous sont synchronisés automatiquement
+                    </div>
+                    {settings.googleTokenExpiry && (
+                      <div className="text-xs text-gray-600">
+                        Token valide jusqu'au {new Date(settings.googleTokenExpiry).toLocaleDateString('fr-FR', { 
+                          day: 'numeric', 
+                          month: 'long', 
+                          year: 'numeric' 
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Token warning */}
+              {isTokenExpiringSoon && (
+                <div className="flex items-start p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
+                  <svg className="w-6 h-6 text-yellow-600 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div className="text-sm text-yellow-800">
+                    <div className="font-semibold mb-1">Token expirant bientôt</div>
+                    <div>
+                      Votre token Google Calendar arrive à expiration. Il sera automatiquement renouvelé lors du prochain rendez-vous.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Features */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="flex items-start p-4 bg-gray-50 rounded-lg">
+                  <svg className="w-5 h-5 text-teal-600 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <div className="font-medium text-gray-900 text-sm mb-1">Synchronisation automatique</div>
+                    <div className="text-xs text-gray-600">Création et mise à jour en temps réel</div>
                   </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Fonctionnalités activées :</h4>
-                  <ul className="space-y-2 text-sm text-gray-600">
-                    <li className="flex items-center">
-                      <svg className="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      Les nouveaux rendez-vous apparaissent automatiquement
-                    </li>
-                    <li className="flex items-center">
-                      <svg className="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      Recevez des notifications sur votre téléphone
-                    </li>
-                    <li className="flex items-center">
-                      <svg className="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      Visualisez votre planning en un coup d'œil
-                    </li>
-                    <li className="flex items-center">
-                      <svg className="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      Codes couleur par type d'intervention
-                    </li>
-                  </ul>
+                <div className="flex items-start p-4 bg-gray-50 rounded-lg">
+                  <svg className="w-5 h-5 text-teal-600 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <div className="font-medium text-gray-900 text-sm mb-1">Rappels automatiques</div>
+                    <div className="text-xs text-gray-600">Notifications 24h et 1h avant</div>
+                  </div>
                 </div>
 
+                <div className="flex items-start p-4 bg-gray-50 rounded-lg">
+                  <svg className="w-5 h-5 text-teal-600 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <div className="font-medium text-gray-900 text-sm mb-1">Codes couleur</div>
+                    <div className="text-xs text-gray-600">Identification visuelle rapide</div>
+                  </div>
+                </div>
+
+                <div className="flex items-start p-4 bg-gray-50 rounded-lg">
+                  <svg className="w-5 h-5 text-teal-600 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <div className="font-medium text-gray-900 text-sm mb-1">Sécurité renforcée</div>
+                    <div className="text-xs text-gray-600">Tokens chiffrés AES-256</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Disconnect button */}
+              <div className="flex justify-end pt-4 border-t border-gray-100">
                 <button
-                  onClick={handleDisconnectGoogleCalendar}
-                  className="px-4 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100"
+                  onClick={handleDisconnectGoogle}
+                  className="px-6 py-3 bg-white border-2 border-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition"
                 >
                   Déconnecter Google Calendar
                 </button>
               </div>
-            ) : (
-              <div>
-                <div className="flex items-start mb-4">
-                  <svg className="h-6 w-6 text-gray-400 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <div className="ml-3">
-                    <p className="text-sm text-gray-600 mb-4">
-                      Connectez votre Google Calendar pour synchroniser automatiquement vos rendez-vous.
-                    </p>
-                    <ul className="space-y-2 text-sm text-gray-600 mb-4">
-                      <li>✓ Les nouveaux rendez-vous apparaissent automatiquement</li>
-                      <li>✓ Recevez des notifications sur votre téléphone</li>
-                      <li>✓ Visualisez votre planning en un coup d'œil</li>
-                      <li>✓ Codes couleur par type d'intervention</li>
-                    </ul>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-10 h-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Google Calendar non connecté
+              </h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                Connectez votre compte Google pour synchroniser automatiquement vos rendez-vous
+              </p>
+
+              <a
+                href="/api/google/auth"
+                className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg font-semibold hover:shadow-xl transition-all"
+              >
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
+                </svg>
+                Connecter Google Calendar
+              </a>
+
+              <div className="mt-8 pt-8 border-t border-gray-200">
+                <h4 className="font-semibold text-gray-900 mb-4">Avantages :</h4>
+                <div className="grid md:grid-cols-3 gap-6 text-left max-w-2xl mx-auto">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-teal-600 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <div className="text-sm">
+                      <div className="font-medium text-gray-900 mb-1">Temps réel</div>
+                      <div className="text-gray-600">Sync automatique</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-teal-600 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <div className="text-sm">
+                      <div className="font-medium text-gray-900 mb-1">Mobile</div>
+                      <div className="text-gray-600">Accès partout</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-teal-600 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <div className="text-sm">
+                      <div className="font-medium text-gray-900 mb-1">Sécurisé</div>
+                      <div className="text-gray-600">Données chiffrées</div>
+                    </div>
                   </div>
                 </div>
-
-                <button
-                  onClick={handleConnectGoogleCalendar}
-                  disabled={connecting}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
-                  </svg>
-                  {connecting ? 'Connexion en cours...' : 'Connecter Google Calendar'}
-                </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Danger zone */}
+      <div className="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
+        <div className="px-6 py-4 bg-red-50 border-b border-red-200">
+          <h2 className="text-xl font-bold text-red-900 flex items-center">
+            <svg className="w-6 h-6 text-red-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            Zone dangereuse
+          </h2>
         </div>
 
-        {/* Informations du compte */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Informations du compte</h2>
-          </div>
-          <div className="px-6 py-6 space-y-4">
+        <div className="p-6">
+          <div className="flex items-start justify-between">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Nom</label>
-              <p className="mt-1 text-sm text-gray-900">{dentist?.name}</p>
+              <h3 className="font-bold text-gray-900 mb-1">Supprimer le compte</h3>
+              <p className="text-sm text-gray-600">
+                Cette action est irréversible. Toutes vos données seront supprimées.
+              </p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
-              <p className="mt-1 text-sm text-gray-900">{dentist?.email}</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Spécialités</label>
-              <p className="mt-1 text-sm text-gray-900">Dentisterie générale, Orthodontie</p>
-            </div>
+            <button
+              onClick={() => alert('Cette fonctionnalité sera bientôt disponible')}
+              className="px-6 py-3 bg-white border-2 border-red-300 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition"
+            >
+              Supprimer le compte
+            </button>
           </div>
         </div>
       </div>
