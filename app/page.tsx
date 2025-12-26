@@ -142,15 +142,16 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Right image */}
+            {/* Right image - Photo du cabinet */}
             <div className="relative">
               <div className="aspect-[4/3] bg-gradient-to-br from-teal-100 to-cyan-100 rounded-2xl shadow-2xl overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-8xl mb-4">🦷</div>
-                    <p className="text-gray-600 font-medium">Cabinet moderne & accueillant</p>
-                  </div>
-                </div>
+                <Image
+                  src="/cabinet-photo.png"
+                  alt="Cabinet Dentaire Sarah Vandevoorde - Vue intérieure"
+                  fill
+                  className="object-cover"
+                  priority
+                />
               </div>
               
               {/* Floating card */}
@@ -319,12 +320,16 @@ export default function HomePage() {
           <div className="max-w-4xl mx-auto">
             <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-8 md:p-12">
               <div className="grid md:grid-cols-2 gap-8 items-center">
-                {/* Photo */}
+                {/* Photo du dentiste */}
                 <div className="relative">
-                  <div className="aspect-square bg-gradient-to-br from-teal-400 to-cyan-500 rounded-2xl shadow-2xl overflow-hidden">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-9xl">👩‍⚕️</div>
-                    </div>
+                  <div className="aspect-square rounded-2xl shadow-2xl overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
+                    <Image
+                      src="/dentist-photo.png"
+                      alt="Dr. Sarah Vandevoorde"
+                      fill
+                      className="object-cover"
+                      priority
+                    />
                   </div>
                   <div className="absolute -bottom-4 -right-4 bg-white rounded-xl p-4 shadow-xl">
                     <div className="text-3xl">⭐⭐⭐⭐⭐</div>
@@ -342,8 +347,18 @@ export default function HomePage() {
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       <div>
-                        <div className="font-semibold text-gray-900">15 ans d'expérience</div>
-                        <div className="text-gray-600">Formation continue en esthétique dentaire</div>
+                        <div className="font-semibold text-gray-900">Formation universitaire</div>
+                        <div className="text-gray-600">Diplôme en médecine dentaire de l'Université Catholique de Louvain (UCLouvain) - 2017</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start">
+                      <svg className="w-6 h-6 text-teal-500 mr-3 mt-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <div>
+                        <div className="font-semibold text-gray-900">Expérience professionnelle</div>
+                        <div className="text-gray-600">8 ans de pratique en dentisterie générale et esthétique</div>
                       </div>
                     </div>
                     
