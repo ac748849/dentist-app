@@ -56,6 +56,16 @@ export default function HomePage() {
               >
                 Prendre rendez-vous
               </Link>
+              <Link
+                href="/login"
+                className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-teal-600 transition font-medium"
+                title="Accès réservé aux dentistes"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span>Espace Dentiste</span>
+              </Link>
             </div>
 
             {/* Mobile menu button */}
@@ -83,6 +93,12 @@ export default function HomePage() {
                 <a href="#contact" className="text-gray-700 hover:text-teal-600 font-medium">Contact</a>
                 <Link href="/booking" className="px-6 py-3 bg-teal-500 text-white rounded-lg font-semibold text-center">
                   Prendre rendez-vous
+                </Link>
+                <Link href="/login" className="flex items-center justify-center space-x-2 px-6 py-3 border-2 border-gray-200 text-gray-700 rounded-lg font-medium hover:border-teal-500 hover:text-teal-600 transition">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>Espace Dentiste</span>
                 </Link>
               </div>
             </div>
@@ -575,7 +591,7 @@ export default function HomePage() {
                 <li><a href="#equipe" className="hover:text-teal-400 transition">Notre équipe</a></li>
                 <li><a href="#contact" className="hover:text-teal-400 transition">Contact</a></li>
                 <li><Link href="/booking" className="hover:text-teal-400 transition">Prendre RDV</Link></li>
-                <li><Link href="/dashboard" className="hover:text-teal-400 transition">Espace Dentiste</Link></li>
+                <li><Link href="/login" className="hover:text-teal-400 transition">Espace Dentiste</Link></li>
               </ul>
             </div>
             
