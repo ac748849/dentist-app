@@ -1,0 +1,374 @@
+{
+    "name": "WhatsApp AI Booking - Complete",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "whatsapp-incoming",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "webhook-1",
+        "name": "📱 Webhook WhatsApp",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [240, 300],
+        "webhookId": "auto-generated"
+      },
+      {
+        "parameters": {
+          "values": {
+            "string": [
+              {
+                "name": "phone",
+                "value": "={{ $json.body.From.replace('whatsapp:', '') }}"
+              },
+              {
+                "name": "message",
+                "value": "={{ $json.body.Body }}"
+              },
+              {
+                "name": "timestamp",
+                "value": "={{ $json.body.Timestamp }}"
+              },
+              {
+                "name": "messageId",
+                "value": "={{ $json.body.MessageSid }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-1",
+        "name": "📝 Extract Message Data",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 1,
+        "position": [460, 300]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.NEXTJS_APP_URL }}/api/ai/chat",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "newMessage",
+                "value": "={{ $json.message }}"
+              },
+              {
+                "name": "phone",
+                "value": "={{ $json.phone }}"
+              },
+              {
+                "name": "channel",
+                "value": "whatsapp"
+              },
+              {
+                "name": "messageId",
+                "value": "={{ $json.messageId }}"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "id": "http-1",
+        "name": "🤖 Call AI API",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [680, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": [
+              {
+                "name": "Success",
+                "conditions": {
+                  "and": [
+                    {
+                      "leftValue": "={{ $json.message }}",
+                      "rightValue": "",
+                      "operation": "isNotEmpty"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "Error",
+                "conditions": {
+                  "and": [
+                    {
+                      "leftValue": "={{ $json.error }}",
+                      "rightValue": "",
+                      "operation": "isNotEmpty"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "id": "if-1",
+        "name": "✅ Check Response",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [900, 300]
+      },
+      {
+        "parameters": {
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "twilioApi",
+          "resource": "message",
+          "operation": "send",
+          "from": "={{ $env.TWILIO_WHATSAPP_NUMBER }}",
+          "to": "whatsapp:{{ $('Extract Message Data').item.json.phone }}",
+          "message": "={{ $json.message }}"
+        },
+        "id": "twilio-1",
+        "name": "💬 Send WhatsApp Reply",
+        "type": "n8n-nodes-base.twilio",
+        "typeVersion": 1,
+        "position": [1120, 200],
+        "credentials": {
+          "twilioApi": {
+            "id": "1",
+            "name": "Twilio Account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "twilioApi",
+          "resource": "message",
+          "operation": "send",
+          "from": "={{ $env.TWILIO_WHATSAPP_NUMBER }}",
+          "to": "whatsapp:{{ $('Extract Message Data').item.json.phone }}",
+          "message": "😕 Désolé, une erreur s'est produite. Veuillez réessayer ou appeler le cabinet."
+        },
+        "id": "twilio-2",
+        "name": "⚠️ Send Error Message",
+        "type": "n8n-nodes-base.twilio",
+        "typeVersion": 1,
+        "position": [1120, 400],
+        "credentials": {
+          "twilioApi": {
+            "id": "1",
+            "name": "Twilio Account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "insert",
+          "schema": "public",
+          "table": "AuditLog",
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "action": "WHATSAPP_MESSAGE_RECEIVED",
+              "entity": "ConversationHistory",
+              "entityId": "={{ $('Call AI API').item.json.conversationId }}",
+              "source": "whatsapp",
+              "changes": "={{ JSON.stringify({ phone: $('Extract Message Data').item.json.phone, message: $('Extract Message Data').item.json.message }) }}"
+            }
+          }
+        },
+        "id": "postgres-1",
+        "name": "📊 Log to Database",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [1340, 200],
+        "credentials": {
+          "postgres": {
+            "id": "2",
+            "name": "Supabase Database"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": [
+              {
+                "name": "Appointment Created",
+                "conditions": {
+                  "and": [
+                    {
+                      "leftValue": "={{ $json.toolCalls }}",
+                      "rightValue": "create_appointment",
+                      "operation": "contains"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "id": "if-2",
+        "name": "🔍 Check Tool Calls",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1560, 200]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.NEXTJS_APP_URL }}/api/google-calendar/create-event",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "appointmentId",
+                "value": "={{ $json.toolResults[0].appointment.id }}"
+              }
+            ]
+          }
+        },
+        "id": "http-2",
+        "name": "📅 Create Google Calendar Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1780, 100]
+      },
+      {
+        "parameters": {
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "twilioApi",
+          "resource": "message",
+          "operation": "send",
+          "from": "={{ $env.TWILIO_WHATSAPP_NUMBER }}",
+          "to": "whatsapp:{{ $env.DENTIST_PHONE }}",
+          "message": "🆕 Nouveau RDV créé via WhatsApp :\n\n👤 {{ $('Call AI API').item.json.toolResults[0].appointment.patient.name }}\n📅 {{ $('Call AI API').item.json.toolResults[0].appointment.startTime }}\n🦷 {{ $('Call AI API').item.json.toolResults[0].appointment.interventionType }}"
+        },
+        "id": "twilio-3",
+        "name": "🔔 Notify Dentist",
+        "type": "n8n-nodes-base.twilio",
+        "typeVersion": 1,
+        "position": [1780, 200],
+        "credentials": {
+          "twilioApi": {
+            "id": "1",
+            "name": "Twilio Account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "📱 Webhook WhatsApp": {
+        "main": [
+          [
+            {
+              "node": "📝 Extract Message Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📝 Extract Message Data": {
+        "main": [
+          [
+            {
+              "node": "🤖 Call AI API",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🤖 Call AI API": {
+        "main": [
+          [
+            {
+              "node": "✅ Check Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Check Response": {
+        "main": [
+          [
+            {
+              "node": "💬 Send WhatsApp Reply",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "⚠️ Send Error Message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💬 Send WhatsApp Reply": {
+        "main": [
+          [
+            {
+              "node": "📊 Log to Database",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📊 Log to Database": {
+        "main": [
+          [
+            {
+              "node": "🔍 Check Tool Calls",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Check Tool Calls": {
+        "main": [
+          [
+            {
+              "node": "📅 Create Google Calendar Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "🔔 Notify Dentist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2024-12-26T16:00:00.000Z",
+    "versionId": "1"
+  }

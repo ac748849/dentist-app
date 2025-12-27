@@ -1,0 +1,416 @@
+{
+    "name": "Telegram AI Booking - Complete",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "telegram-incoming",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "webhook-telegram-1",
+        "name": "📱 Webhook Telegram",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [240, 300],
+        "webhookId": "auto-generated"
+      },
+      {
+        "parameters": {
+          "values": {
+            "string": [
+              {
+                "name": "chatId",
+                "value": "={{ $json.body.message.chat.id }}"
+              },
+              {
+                "name": "message",
+                "value": "={{ $json.body.message.text }}"
+              },
+              {
+                "name": "userId",
+                "value": "={{ $json.body.message.from.id }}"
+              },
+              {
+                "name": "userName",
+                "value": "={{ $json.body.message.from.first_name }} {{ $json.body.message.from.last_name }}"
+              },
+              {
+                "name": "timestamp",
+                "value": "={{ $json.body.message.date }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "set-telegram-1",
+        "name": "📝 Extract Message Data",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 1,
+        "position": [460, 300]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.NEXTJS_APP_URL }}/api/ai/chat",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "newMessage",
+                "value": "={{ $json.message }}"
+              },
+              {
+                "name": "telegramId",
+                "value": "={{ $json.chatId }}"
+              },
+              {
+                "name": "channel",
+                "value": "telegram"
+              },
+              {
+                "name": "userName",
+                "value": "={{ $json.userName }}"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "id": "http-telegram-1",
+        "name": "🤖 Call AI API",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [680, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": [
+              {
+                "name": "Success",
+                "conditions": {
+                  "and": [
+                    {
+                      "leftValue": "={{ $json.message }}",
+                      "rightValue": "",
+                      "operation": "isNotEmpty"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "Error",
+                "conditions": {
+                  "and": [
+                    {
+                      "leftValue": "={{ $json.error }}",
+                      "rightValue": "",
+                      "operation": "isNotEmpty"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "id": "if-telegram-1",
+        "name": "✅ Check Response",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [900, 300]
+      },
+      {
+        "parameters": {
+          "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "chat_id",
+                "value": "={{ $('Extract Message Data').item.json.chatId }}"
+              },
+              {
+                "name": "text",
+                "value": "={{ $json.message }}"
+              },
+              {
+                "name": "parse_mode",
+                "value": "Markdown"
+              }
+            ]
+          }
+        },
+        "id": "http-telegram-2",
+        "name": "💬 Send Telegram Reply",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1120, 200]
+      },
+      {
+        "parameters": {
+          "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "chat_id",
+                "value": "={{ $('Extract Message Data').item.json.chatId }}"
+              },
+              {
+                "name": "text",
+                "value": "😕 Désolé, une erreur s'est produite. Veuillez réessayer ou appeler le cabinet."
+              }
+            ]
+          }
+        },
+        "id": "http-telegram-3",
+        "name": "⚠️ Send Error Message",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1120, 400]
+      },
+      {
+        "parameters": {
+          "operation": "insert",
+          "schema": "public",
+          "table": "AuditLog",
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "action": "TELEGRAM_MESSAGE_RECEIVED",
+              "entity": "ConversationHistory",
+              "entityId": "={{ $('Call AI API').item.json.conversationId }}",
+              "source": "telegram",
+              "changes": "={{ JSON.stringify({ chatId: $('Extract Message Data').item.json.chatId, message: $('Extract Message Data').item.json.message }) }}"
+            }
+          }
+        },
+        "id": "postgres-telegram-1",
+        "name": "📊 Log to Database",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2,
+        "position": [1340, 200],
+        "credentials": {
+          "postgres": {
+            "id": "2",
+            "name": "Supabase Database"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": [
+              {
+                "name": "Appointment Created",
+                "conditions": {
+                  "and": [
+                    {
+                      "leftValue": "={{ $json.toolCalls }}",
+                      "rightValue": "create_appointment",
+                      "operation": "contains"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "id": "if-telegram-2",
+        "name": "🔍 Check Tool Calls",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1560, 200]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.NEXTJS_APP_URL }}/api/google-calendar/create-event",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "appointmentId",
+                "value": "={{ $json.toolResults[0].appointment.id }}"
+              }
+            ]
+          }
+        },
+        "id": "http-telegram-4",
+        "name": "📅 Create Google Calendar Event",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1780, 100]
+      },
+      {
+        "parameters": {
+          "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "chat_id",
+                "value": "={{ $env.DENTIST_TELEGRAM_ID }}"
+              },
+              {
+                "name": "text",
+                "value": "🆕 *Nouveau RDV créé via Telegram*\n\n👤 {{ $('Call AI API').item.json.toolResults[0].appointment.patient.name }}\n📅 {{ $('Call AI API').item.json.toolResults[0].appointment.startTime }}\n🦷 {{ $('Call AI API').item.json.toolResults[0].appointment.interventionType }}"
+              },
+              {
+                "name": "parse_mode",
+                "value": "Markdown"
+              }
+            ]
+          }
+        },
+        "id": "http-telegram-5",
+        "name": "🔔 Notify Dentist",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [1780, 200]
+      }
+    ],
+    "connections": {
+      "📱 Webhook Telegram": {
+        "main": [
+          [
+            {
+              "node": "📝 Extract Message Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📝 Extract Message Data": {
+        "main": [
+          [
+            {
+              "node": "🤖 Call AI API",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🤖 Call AI API": {
+        "main": [
+          [
+            {
+              "node": "✅ Check Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Check Response": {
+        "main": [
+          [
+            {
+              "node": "💬 Send Telegram Reply",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "⚠️ Send Error Message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💬 Send Telegram Reply": {
+        "main": [
+          [
+            {
+              "node": "📊 Log to Database",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📊 Log to Database": {
+        "main": [
+          [
+            {
+              "node": "🔍 Check Tool Calls",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Check Tool Calls": {
+        "main": [
+          [
+            {
+              "node": "📅 Create Google Calendar Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "🔔 Notify Dentist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2024-12-26T17:30:00.000Z",
+    "versionId": "1"
+  }

@@ -1,105 +1,31 @@
-
-// Schéma Prisma enrichi avec types d'intervention + Google Calendar + N8N
-// Version: 2.0
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-}
+// prisma/schema.prisma - Version 3.0 (IA Conversationnelle)
 
 generator client {
   provider = "prisma-client-js"
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ENUMS (Types énumérés)
-// ═══════════════════════════════════════════════════════════════
-
-enum AppointmentStatus {
-  PENDING    // En attente de validation dentiste
-  CONFIRMED  // Confirmé par le dentiste
-  CANCELLED  // Annulé
-  COMPLETED  // Terminé (après le RDV)
-  NO_SHOW    // Patient absent
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-enum InterventionType {
-  // Consultations de base
-  CONTROLE            // Contrôle / Check-up
-  URGENCE             // Urgence / Douleur
-  PREMIERE_VISITE     // Première visite
-  
-  // Soins dentaires
-  CARIE               // Traitement carie / Plombage
-  DEVITALISATION      // Dévitalisation / Root canal
-  EXTRACTION          // Extraction dentaire
-  DETARTRAGE          // Détartrage / Nettoyage
-  BLANCHIMENT         // Blanchiment dentaire
-  
-  // Prothèses
-  COURONNE            // Pose couronne
-  BRIDGE              // Pose bridge
-  IMPLANT             // Implant dentaire
-  PROTHESE_COMPLETE   // Dentier complet
-  PROTHESE_PARTIELLE  // Dentier partiel
-  
-  // Orthodontie
-  ORTHODONTIE_CONSULTATION  // Consultation orthodontie
-  ORTHODONTIE_SUIVI        // Suivi appareil dentaire
-  ORTHODONTIE_POSE         // Pose appareil
-  ORTHODONTIE_RETRAIT      // Retrait appareil
-  
-  // Pédiatrie
-  PEDIATRIE_CONTROLE   // Contrôle enfant
-  PEDIATRIE_SOIN       // Soin enfant
-  PEDIATRIE_PREVENTION // Prévention / Éducation
-  
-  // Chirurgie
-  CHIRURGIE_SIMPLE     // Chirurgie simple
-  CHIRURGIE_COMPLEXE   // Chirurgie complexe
-  GREFFE_OSSEUSE       // Greffe osseuse
-  
-  // Autre
-  AUTRE                // Autre intervention
+// ============================================================
+// EXISTANT (Sessions précédentes)
+// ============================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      UserRole @default(PATIENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-enum PatientAge {
-  ENFANT      // 0-12 ans
-  ADOLESCENT  // 13-17 ans
-  ADULTE      // 18-64 ans
-  SENIOR      // 65+ ans
-}
-
-// ═══════════════════════════════════════════════════════════════
-// MODÈLES PRINCIPAUX
-// ═══════════════════════════════════════════════════════════════
-
-model Dentist {
-  id             String   @id @default(cuid())
-  email          String   @unique
-  name           String
-  phone          String?
-  specialties    String[]
-  
-  workingHours   Json?
-  
-  // 🆕 Google Calendar Integration
-  googleCalendarId       String?  @unique
-  googleAccessToken      String?
-  googleRefreshToken     String?
-  googleTokenExpiry      DateTime?
-  googleCalendarEnabled  Boolean  @default(false)
-  googleWebhookChannelId String?
-  googleWebhookExpiry    DateTime?
-  
-  appointments   Appointment[]
-  timeSlots      TimeSlot[]
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
-  @@index([email])
+enum UserRole {
+  ADMIN
+  DENTIST
+  PATIENT
 }
 
 model Patient {
@@ -107,183 +33,394 @@ model Patient {
   phone           String    @unique
   name            String
   email           String?
-  
-  // 🆕 Informations démographiques
   dateOfBirth     DateTime?
   ageCategory     PatientAge @default(ADULTE)
   
-  // 🆕 Multi-canal
+  // Multi-canal
   whatsappPhone   String?
   telegramId      String?   @unique
   preferredChannel String?
   
-  // RGPD
-  consentGDPR     Boolean   @default(false)
-  consentDate     DateTime?
-  
-  // Historique médical (JSON pour flexibilité)
+  // Médical
   medicalHistory  Json?
   notes           String?
   
+  // Relations
   appointments    Appointment[]
+  conversations   ConversationHistory[]
+  preferences     PatientPreferences?
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+enum PatientAge {
+  ENFANT
+  ADOLESCENT
+  ADULTE
+  SENIOR
+}
+
+model Dentist {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  phone         String?
+  specialties   String[]
+  workingHours  Json?
   
-  @@index([phone])
-  @@index([whatsappPhone])
+  // Google Calendar
+  googleCalendarId       String?   @unique
+  googleAccessToken      String?
+  googleRefreshToken     String?
+  googleTokenExpiry      DateTime?
+  googleCalendarEnabled  Boolean   @default(false)
+  googleWebhookChannelId String?
+  googleWebhookExpiry    DateTime?
+  
+  // Relations
+  appointments  Appointment[]
+  knowledgeBase KnowledgeBase[]
+  customRules   CustomRule[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Appointment {
-  id              String            @id @default(cuid())
-  dentistId       String
-  patientId       String
+  id                    String           @id @default(cuid())
+  dentistId             String
+  patientId             String
   
-  // Timing
-  startTime       DateTime
-  endTime         DateTime
-  duration        Int               // Durée en minutes
+  startTime             DateTime
+  endTime               DateTime
+  status                AppointmentStatus @default(PENDING)
+  source                String            @default("web")
   
-  // 🆕 Type d'intervention
-  interventionType InterventionType @default(CONTROLE)
+  // Type d'intervention
+  interventionType      InterventionType  @default(CONTROLE)
+  duration              Int               // En minutes
   
-  // Statut
-  status          AppointmentStatus @default(PENDING)
-  
-  // Source et traçabilité
-  source          String
-  createdVia      String?
-  externalId      String?
-  
-  // Notes
-  notes           String?
-  dentistNotes    String?
-  
-  // Rappels et notifications
-  reminderSent    Boolean           @default(false)
-  reminderSentAt  DateTime?
-  confirmationSent Boolean          @default(false)
-  confirmationSentAt DateTime?
-  
-  // 🆕 Google Calendar Integration
-  googleCalendarEventId String?     @unique
+  // Google Calendar
+  googleCalendarEventId String?           @unique
   googleCalendarLink    String?
-  syncedWithGoogle      Boolean     @default(false)
+  syncedWithGoogle      Boolean           @default(false)
   lastSyncedAt          DateTime?
   
-  // 🆕 N8N Automation
+  // N8N
   n8nExecutionId        String?
   automationLogs        Json?
   
-  // Relations
-  dentist         Dentist           @relation(fields: [dentistId], references: [id])
-  patient         Patient           @relation(fields: [patientId], references: [id])
+  // Notes
+  notes                 String?           // Patient
+  dentistNotes          String?           // Privé dentiste
   
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  // Relations
+  dentist               Dentist           @relation(fields: [dentistId], references: [id])
+  patient               Patient           @relation(fields: [patientId], references: [id])
+  
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
   
   @@index([dentistId, startTime])
   @@index([patientId])
   @@index([status])
-  @@index([interventionType])
-  @@index([startTime])
-  @@index([googleCalendarEventId])
 }
 
-model TimeSlot {
-  id              String   @id @default(cuid())
-  dentistId       String
-  
-  startTime       DateTime
-  endTime         DateTime
-  duration        Int
-  
-  isAvailable     Boolean  @default(true)
-  isRecurring     Boolean  @default(false)
-  
-  // 🆕 Types d'intervention acceptés pour ce créneau
-  allowedInterventionTypes InterventionType[]
-  
-  recurrenceRule  String?
-  
-  unavailableReason String?
-  
-  dentist         Dentist  @relation(fields: [dentistId], references: [id])
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@index([dentistId, startTime])
-  @@index([isAvailable])
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
 }
 
-// 🆕 Configuration des durées par type d'intervention
+enum InterventionType {
+  // Consultations
+  CONTROLE
+  URGENCE
+  PREMIERE_VISITE
+  
+  // Soins
+  CARIE
+  DEVITALISATION
+  EXTRACTION
+  DETARTRAGE
+  BLANCHIMENT
+  
+  // Prothèses
+  COURONNE
+  BRIDGE
+  IMPLANT
+  PROTHESE_COMPLETE
+  PROTHESE_PARTIELLE
+  
+  // Orthodontie
+  ORTHODONTIE_CONSULTATION
+  ORTHODONTIE_SUIVI
+  ORTHODONTIE_POSE
+  ORTHODONTIE_RETRAIT
+  
+  // Pédiatrie
+  PEDIATRIE_CONTROLE
+  PEDIATRIE_SOIN
+  PEDIATRIE_PREVENTION
+  
+  // Chirurgie
+  CHIRURGIE_SIMPLE
+  CHIRURGIE_COMPLEXE
+  GREFFE_OSSEUSE
+  
+  // Autre
+  AUTRE
+}
+
 model InterventionDuration {
-  id               String           @id @default(cuid())
-  interventionType InterventionType @unique
-  
-  defaultDuration  Int
-  minDuration      Int
-  maxDuration      Int
-  
-  estimatedPrice   Float?
-  
-  requiresPreparation Boolean      @default(false)
+  id                  String           @id @default(cuid())
+  interventionType    InterventionType @unique
+  defaultDuration     Int              // Minutes
+  minDuration         Int
+  maxDuration         Int
+  estimatedPrice      Float?
+  requiresPreparation Boolean          @default(false)
   preparationNotes    String?
   
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 }
 
-// 🆕 Journal d'audit (traçabilité RGPD)
+// ============================================================
+// 🆕 NOUVEAUX MODÈLES (IA Conversationnelle)
+// ============================================================
+
+// 1. Base de connaissances éditable par le dentiste
+model KnowledgeBase {
+  id          String   @id @default(cuid())
+  dentistId   String
+  
+  category    KBCategory
+  title       String
+  content     String   @db.Text
+  
+  // SEO & Search
+  keywords    String[] // Pour recherche sémantique
+  isActive    Boolean  @default(true)
+  viewCount   Int      @default(0)
+  
+  // Métadonnées
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  dentist     Dentist  @relation(fields: [dentistId], references: [id], onDelete: Cascade)
+  
+  @@index([dentistId, category])
+  @@index([isActive])
+}
+
+enum KBCategory {
+  TARIFS
+  ACCES
+  FAQ
+  HORAIRES
+  URGENCES
+  SERVICES
+  EQUIPE
+  AUTRE
+}
+
+// 2. Règles personnalisées du dentiste (pour IA)
+model CustomRule {
+  id          String   @id @default(cuid())
+  dentistId   String
+  
+  ruleType    RuleType
+  priority    Int      @default(0) // Plus élevé = plus prioritaire
+  
+  // Configuration temporelle
+  dayOfWeek   String?  // "monday", "tuesday", ..., "sunday", ou null = tous les jours
+  timeStart   String?  // "10:00" format HH:mm
+  timeEnd     String?  // "12:00" format HH:mm
+  
+  // Dates spécifiques (vacances, congés)
+  specificDate DateTime?
+  dateRangeStart DateTime?
+  dateRangeEnd   DateTime?
+  
+  // Description human-readable
+  description String
+  
+  // Action
+  action      RuleAction @default(BLOCK)
+  
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  // Relations
+  dentist     Dentist    @relation(fields: [dentistId], references: [id], onDelete: Cascade)
+  
+  @@index([dentistId, isActive])
+  @@index([priority])
+}
+
+enum RuleType {
+  HORAIRE     // Bloquer certaines heures
+  JOUR        // Bloquer certains jours
+  PAUSE       // Pause déjeuner/pause
+  BLOCAGE     // Blocage temporaire (vacances, formation)
+  PREFERENCE  // Préférence (ex: préférer matin pour implants)
+}
+
+enum RuleAction {
+  BLOCK       // Bloquer complètement
+  DISCOURAGE  // Déconseiller mais autoriser
+  PREFER      // Préférer ce créneau
+}
+
+// 3. Historique conversations (contexte IA)
+model ConversationHistory {
+  id             String   @id @default(cuid())
+  patientId      String?
+  
+  // Identification canal
+  channel        ConversationChannel
+  externalId     String?  // WhatsApp phone, Telegram chat_id, session_id web
+  
+  // Messages
+  messages       Json     // Array: [{role: "user"|"assistant", content: "...", timestamp}]
+  
+  // État conversation
+  currentIntent  String?  // "booking", "info", "question", "cancel"
+  currentStep    String?  // "collect_type", "collect_preferences", "propose_slots", etc.
+  
+  // Données extraites
+  extractedData  Json?    // {intervention_type, preferred_days, preferred_time, urgency, etc.}
+  
+  // Métriques
+  messageCount   Int      @default(0)
+  isCompleted    Boolean  @default(false)
+  satisfactionScore Int?  // 1-5
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  completedAt    DateTime?
+  
+  // Relations
+  patient        Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  
+  @@index([externalId, channel])
+  @@index([patientId])
+  @@index([isCompleted])
+}
+
+enum ConversationChannel {
+  WEB
+  WHATSAPP
+  TELEGRAM
+}
+
+// 4. Préférences patient (pour ML & personnalisation)
+model PatientPreferences {
+  id                String   @id @default(cuid())
+  patientId         String   @unique
+  
+  // Préférences explicites
+  preferredDays     String[] // ["monday", "tuesday", "friday"]
+  preferredTimes    String   @default("anytime") // "morning", "afternoon", "evening", "anytime"
+  urgencyDefault    String   @default("normal")  // "urgent", "normal", "flexible"
+  
+  // Contraintes
+  avoidDays         String[] // Jours à éviter
+  minNoticeHours    Int?     // Délai minimum de réservation (ex: 24h)
+  
+  // Historique comportemental (pour ML)
+  bookingHistory    Json?    // {total: 10, cancelled: 1, patterns: {...}}
+  lastBookingDate   DateTime?
+  averageRescheduleDays Int?
+  
+  // Communication
+  preferredLanguage String   @default("fr")
+  smsReminders      Boolean  @default(true)
+  whatsappReminders Boolean  @default(false)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+// 5. Logs IA (debugging & analytics)
+model AILog {
+  id             String   @id @default(cuid())
+  
+  conversationId String?
+  patientId      String?
+  
+  // Request
+  prompt         String   @db.Text
+  tools          Json?
+  
+  // Response
+  response       String   @db.Text
+  toolCalls      Json?    // Tools appelés par l'IA
+  
+  // Métriques
+  provider       String   // "claude", "local", "ollama"
+  model          String
+  tokensInput    Int?
+  tokensOutput   Int?
+  latencyMs      Int?
+  cost           Float?   // En USD
+  
+  // Feedback
+  wasHelpful     Boolean?
+  userFeedback   String?
+  
+  createdAt      DateTime @default(now())
+  
+  @@index([conversationId])
+  @@index([provider, createdAt])
+}
+
+// 6. Audit Log (RGPD)
 model AuditLog {
-  id              String   @id @default(cuid())
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String   // "CREATE_APPOINTMENT", "UPDATE_KB", "DELETE_RULE"
+  entity    String   // "Appointment", "KnowledgeBase", etc.
+  entityId  String?
+  changes   Json?    // Avant/après
+  source    String?  // "web", "whatsapp", "n8n"
+  ipAddress String?
+  createdAt DateTime @default(now())
   
-  userId          String?
-  userType        String
-  
-  action          String
-  entity          String
-  entityId        String?
-  
-  changes         Json?
-  ipAddress       String?
-  userAgent       String?
-  
-  source          String
-  
-  createdAt       DateTime @default(now())
-  
-  @@index([entityId])
-  @@index([action])
-  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
 }
 
-// 🆕 Configuration N8N
+// 7. N8N Webhooks config
 model N8NWebhook {
-  id              String   @id @default(cuid())
-  name            String   @unique
-  webhookUrl      String   @unique
-  description     String?
-  isActive        Boolean  @default(true)
-  
-  events          String[]
-  
-  totalCalls      Int      @default(0)
-  lastCalledAt    DateTime?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String   @unique
+  webhookUrl  String
+  events      String[] // ["appointment.created", "appointment.cancelled"]
+  isActive    Boolean  @default(true)
+  lastTriggered DateTime?
+  totalCalls  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
-// 🆕 Configuration de l'application
+// 8. Configuration app
 model AppConfig {
-  id              String   @id @default(cuid())
-  key             String   @unique
-  value           String
-  description     String?
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  category  String   @default("general")
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  @@index([category])
 }
-
